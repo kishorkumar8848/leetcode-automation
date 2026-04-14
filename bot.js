@@ -13,7 +13,7 @@ const GEMINI_API_KEY = "AIzaSyBjITyAYlR7sM9lostqzCcTEO8weR0D7go";
 // =======================
 // 3. INIT BOT
 // =======================
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
 // =======================
 // 4. STORAGE
@@ -74,7 +74,7 @@ async function generateCode(problemTitle) {
             },
             {
                 headers: {
-                    "Authorization": "Bearer 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",
+                    "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
                     "Content-Type": "application/json"
                 }
             }
