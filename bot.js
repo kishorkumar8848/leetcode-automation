@@ -1,27 +1,19 @@
 // =======================
 // 1. IMPORTS
 // =======================
-const TelegramBot = require('node-telegram-bot-api');
-const axios = require('axios');
+const TelegramBot = require("node-telegram-bot-api");
+const axios = require("axios");
 
-// =======================
-// 2. CONFIG
-// =======================
-const BOT_TOKEN = "8456180566:AAGWfnW64O-mImdRNd4auzVpJZXY-sRafbU";
-const GEMINI_API_KEY = "AIzaSyBjITyAYlR7sM9lostqzCcTEO8weR0D7go";
-
-// =======================
-// 3. INIT BOT
-// =======================
+// ✅ Create bot WITHOUT auto polling
 const bot = new TelegramBot(process.env.BOT_TOKEN, {
-    polling: {
-        interval: 300,
-        autoStart: true,
-        params: {
-            timeout: 10
-        }
-    }
+  polling: false
 });
+
+bot.deleteWebHook();
+bot.startPolling();
+process.env.OPENROUTER_API_KEY
+// =======================
+
 
 // =======================
 // 4. STORAGE
