@@ -13,7 +13,15 @@ const GEMINI_API_KEY = "AIzaSyBjITyAYlR7sM9lostqzCcTEO8weR0D7go";
 // =======================
 // 3. INIT BOT
 // =======================
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+const bot = new TelegramBot(process.env.BOT_TOKEN, {
+    polling: {
+        interval: 300,
+        autoStart: true,
+        params: {
+            timeout: 10
+        }
+    }
+});
 
 // =======================
 // 4. STORAGE
