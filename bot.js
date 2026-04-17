@@ -1,43 +1,20 @@
-// =======================
-// 1. IMPORTS
-// =======================
 const TelegramBot = require("node-telegram-bot-api");
 const axios = require("axios");
+const http = require("http");   // ← ADD THIS
 
-// ✅ Create bot WITHOUT auto polling
-const bot = new TelegramBot(process.env.BOT_TOKEN, {
-  polling: false
-});
-
+const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
 bot.deleteWebHook();
 bot.startPolling();
-process.env.OPENROUTER_API_KEY
-// =======================
 
-
-// =======================
-// 4. STORAGE
-// =======================
 let userCode = {};
 let userProblem = {};
 
-// =======================
-// 5. FETCH RANDOM PROBLEM
-// =======================
 async function getProblem() {
     try {
         const res = await axios.post(
             'https://leetcode.com/graphql',
             {
-                query: `
-                query {
-                  randomQuestion(categorySlug: "", filters: {}) {
-                    title
-                    titleSlug
-                    difficulty
-                  }
-                }
-                `
+                query: `query { randomQuestion(categorySlug: "", filters: {}) { title titleSlug difficulty } }`
             },
             {
                 headers: {
@@ -47,18 +24,13 @@ async function getProblem() {
                 }
             }
         );
-
         return res.data.data.randomQuestion;
-
     } catch (error) {
         console.error("ERROR:", error.response?.data || error.message);
         return null;
     }
 }
 
-// =======================
-// 6. GENERATE CODE (AI)
-// =======================
 async function generateCode(problemTitle) {
     try {
         const res = await axios.post(
@@ -68,7 +40,7 @@ async function generateCode(problemTitle) {
                 messages: [
                     {
                         role: "user",
-                        content: `Return ONLY Java code in LeetCode format .No explanation. No comments. problem: ${problemTitle}. No explanation.`
+                        content: `Return ONLY Java code in LeetCode format. No explanation. No comments. problem: ${problemTitle}.`
                     }
                 ]
             },
@@ -81,10 +53,7 @@ async function generateCode(problemTitle) {
         );
 
         let output = res.data.choices[0].message.content;
-
-        // clean markdown
-        output = output.replace(/```python/g, "").replace(/```/g, "");
-
+        output = output.replace(/```java/g, "").replace(/```/g, "").trim();
         return output;
 
     } catch (err) {
@@ -92,11 +61,7 @@ async function generateCode(problemTitle) {
         return "❌ AI failed.";
     }
 }
-// =======================
-// 7. COMMANDS
-// =======================
 
-// START
 bot.onText(/\/start/, (msg) => {
     bot.sendMessage(msg.chat.id,
 `🚀 LeetCode AI Bot Ready!
@@ -104,80 +69,56 @@ bot.onText(/\/start/, (msg) => {
 Commands:
 /problem - Get problem + AI code
 /submit - Show code + link
-/help - Help menu`
-    );
+/help - Help menu`);
 });
 
-// HELP
 bot.onText(/\/help/, (msg) => {
     bot.sendMessage(msg.chat.id,
 `📌 Commands:
 /problem - Get problem + AI code
-/submit - Show submission link`
-    );
+/submit - Show submission link`);
 });
 
-// PROBLEM + AI CODE
 bot.onText(/\/problem/, async (msg) => {
     const chatId = msg.chat.id;
-
     const q = await getProblem();
-    if (!q) {
-        bot.sendMessage(chatId, "Error");
-        return;
-    }
+    if (!q) { bot.sendMessage(chatId, "❌ Error fetching problem."); return; }
 
     const code = await generateCode(q.title);
-
     const url = `https://leetcode.com/problems/${q.titleSlug}`;
 
-    // ✅ Send ONLY code + button
-    bot.sendMessage(
-        chatId,
-        code,
-        {
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        {
-                            text: "Solve in your account 🚀",
-                            url: url
-                        }
-                    ]
-                ]
-            }
+    // Save for /submit
+    userCode[chatId] = code;
+    userProblem[chatId] = q;
+
+    bot.sendMessage(chatId, code, {
+        reply_markup: {
+            inline_keyboard: [[{ text: "Solve in your account 🚀", url }]]
         }
-    );
+    });
 });
-// SUBMIT
+
 bot.onText(/\/submit/, (msg) => {
     const chatId = msg.chat.id;
-
     const code = userCode[chatId];
     const problem = userProblem[chatId];
 
-    if (!problem) {
-        bot.sendMessage(chatId, "❌ No problem found. Use /problem first.");
-        return;
-    }
-
-    if (!code) {
-        bot.sendMessage(chatId, "❌ No code found.");
-        return;
-    }
+    if (!problem) { bot.sendMessage(chatId, "❌ No problem found. Use /problem first."); return; }
+    if (!code) { bot.sendMessage(chatId, "❌ No code found."); return; }
 
     const url = `https://leetcode.com/problems/${problem.titleSlug}`;
-
-    bot.sendMessage(
-        chatId,
+    bot.sendMessage(chatId,
 `🚀 Ready to submit!
 
 📌 Problem: ${problem.title}
 
-👉 Open:
-${url}
+👉 Open: ${url}
 
 💻 Your Code:
-${code.slice(0, 3000)}`
-    );
+${code.slice(0, 3000)}`);
+});
+
+// ✅ Dummy HTTP server so Render doesn't kill the process
+http.createServer((req, res) => res.end("Bot is running!")).listen(process.env.PORT || 3000, () => {
+    console.log("HTTP server running - keeping Render alive");
 });
