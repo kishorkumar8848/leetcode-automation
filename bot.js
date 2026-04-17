@@ -1,10 +1,26 @@
 const TelegramBot = require("node-telegram-bot-api");
 const axios = require("axios");
-const http = require("http");   // ← ADD THIS
+const http = require("http");
 
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
-bot.deleteWebHook();
-bot.startPolling();
+
+// ✅ Await deleteWebHook BEFORE starting polling
+async function startBot() {
+    try {
+        await bot.deleteWebHook();
+        console.log("Webhook deleted");
+
+        // ✅ Close any existing connections first
+        await bot.closeWebHook();
+    } catch (e) {
+        console.log("Webhook cleanup:", e.message);
+    }
+
+    bot.startPolling({ restart: true });
+    console.log("Bot polling started");
+}
+
+startBot();
 
 let userCode = {};
 let userProblem = {};
@@ -26,7 +42,7 @@ async function getProblem() {
         );
         return res.data.data.randomQuestion;
     } catch (error) {
-        console.error("ERROR:", error.response?.data || error.message);
+        console.error("LeetCode ERROR:", error.response?.data || error.message);
         return null;
     }
 }
@@ -57,7 +73,8 @@ async function generateCode(problemTitle) {
         return output;
 
     } catch (err) {
-        console.error("AI Error:", err.response?.data || err.message);
+        // ✅ Print the REAL error so you can debug
+        console.error("AI Error:", JSON.stringify(err.response?.data) || err.message);
         return "❌ AI failed.";
     }
 }
@@ -81,17 +98,26 @@ bot.onText(/\/help/, (msg) => {
 
 bot.onText(/\/problem/, async (msg) => {
     const chatId = msg.chat.id;
+
+    await bot.sendMessage(chatId, "⏳ Fetching problem...");
+
     const q = await getProblem();
-    if (!q) { bot.sendMessage(chatId, "❌ Error fetching problem."); return; }
+    if (!q) {
+        bot.sendMessage(chatId, "❌ Error fetching problem from LeetCode.");
+        return;
+    }
+
+    await bot.sendMessage(chatId, `🧩 Problem: *${q.title}* (${q.difficulty})`, { parse_mode: "Markdown" });
+    await bot.sendMessage(chatId, "🤖 Generating code...");
 
     const code = await generateCode(q.title);
     const url = `https://leetcode.com/problems/${q.titleSlug}`;
 
-    // Save for /submit
     userCode[chatId] = code;
     userProblem[chatId] = q;
 
-    bot.sendMessage(chatId, code, {
+    bot.sendMessage(chatId, `\`\`\`java\n${code}\n\`\`\``, {
+        parse_mode: "Markdown",
         reply_markup: {
             inline_keyboard: [[{ text: "Solve in your account 🚀", url }]]
         }
@@ -118,7 +144,7 @@ bot.onText(/\/submit/, (msg) => {
 ${code.slice(0, 3000)}`);
 });
 
-// ✅ Dummy HTTP server so Render doesn't kill the process
+// ✅ HTTP server to keep Render alive
 http.createServer((req, res) => res.end("Bot is running!")).listen(process.env.PORT || 3000, () => {
     console.log("HTTP server running - keeping Render alive");
 });
